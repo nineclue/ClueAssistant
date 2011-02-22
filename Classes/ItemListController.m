@@ -68,26 +68,6 @@
 	[longPressRecognizer release];
 }
 
-/*
-- (void)viewDidAppear:(BOOL)animated {
-	[super viewDidAppear:animated];
-	NSLog(@"ItemListController appeared : %@", self.currentSection);
-}
-
-- (void)viewDidDisappear:(BOOL)animated {
-	[super viewDidDisappear:animated];
-	NSLog(@"ItemListController disappeared : %@", self.currentSection);
-}
-*/
-	
-/*
-// Override to allow orientations other than the default portrait orientation.
-- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation {
-    // Return YES for supported orientations.
-    return (interfaceOrientation == UIInterfaceOrientationPortrait);
-}
-*/
-
 // Customize the appearance of table view cells.
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *CellIdentifier = @"ItemList";
@@ -97,53 +77,8 @@
     if (cell == nil) {
         cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:CellIdentifier] autorelease];
 		
-		/*
-		orderLabel = [[UILabel alloc] initWithFrame:CGRectMake(10, 10, 25, 25)];
-		orderLabel.font = [UIFont boldSystemFontOfSize:20];
-		orderLabel.textAlignment = UITextAlignmentRight;
-		orderLabel.backgroundColor = [UIColor clearColor];
-		orderLabel.tag = kItemCellOrderLabelTag;
-		[cell.contentView addSubview:orderLabel];
-		[orderLabel release];
-		
-		nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(50, 10, 150, 25)];
-		nameLabel.font = [UIFont boldSystemFontOfSize:18];
-		nameLabel.backgroundColor = [UIColor clearColor];
-		nameLabel.tag = kItemCellNameLabelTag;
-		[cell.contentView addSubview:nameLabel];
-		[nameLabel release];
-		
-		priceLabel = [[UILabel alloc] initWithFrame:CGRectMake(205, 10, 70, 25)];
-		priceLabel.font = [UIFont systemFontOfSize:16];
-		priceLabel.textColor = [UIColor blueColor];
-		priceLabel.backgroundColor = [UIColor clearColor];
-		priceLabel.textAlignment = UITextAlignmentRight;
-		priceLabel.tag = kItemCellPriceLabelTag;
-		[cell.contentView addSubview:priceLabel];
-		[priceLabel release];
-		*/
     }
-    /*	
-	Item *item = [self.entityList objectAtIndex:[indexPath row]];
-	
-	orderLabel = (UILabel *)[cell viewWithTag:kItemCellOrderLabelTag];
-	nameLabel = (UILabel *)[cell viewWithTag:kItemCellNameLabelTag];
-	
-	NSInteger itemOrder = [item.order intValue];
-	orderLabel.text = [NSString stringWithFormat:@"%d", (itemOrder + 1)];
-	if (itemOrder == self.selectedRow) {
-		orderLabel.textColor = [UIColor blueColor];
-	} else {
-		orderLabel.textColor = [UIColor blackColor];
-	}
-	// orderLabel.text = [item.order stringValue];
-	nameLabel.text = item.name;
-	if (item.price != [NSDecimalNumber notANumber]) {
-		priceLabel = (UILabel *)[cell viewWithTag:kItemCellPriceLabelTag];
-		priceLabel.text = [item.price stringValue];
-	}
-	*/
-	
+
     // Configure the cell...
     NSManagedObject *mo = [self.entityList objectAtIndex:[indexPath row]];
 	cell.textLabel.text = [mo valueForKey:kManagedObjectNameKey];
@@ -151,10 +86,8 @@
 	// NSLog(@"%d %d", itemOrder, self.selectedRow);
 	if (itemOrder == self.selectedRow) {
 		cell.textLabel.textColor = [UIColor blueColor];
-		// cell.textLabel.shadowColor = [UIColor yellowColor];
 	} else {
 		cell.textLabel.textColor = [UIColor blackColor];
-		// cell.textLabel.shadowColor = nil;
 	}
 	NSDecimalNumber *price = [mo valueForKey:kManagedObjectPriceKey];
 	if (price != [NSDecimalNumber notANumber]) 
@@ -268,20 +201,25 @@
 	return self.summaryLabel;
 }
 
-/*
-- (NSString *) tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	BOOL hasNilValue;
-	NSDecimalNumber *sum = [self sumOfItemsToRow:row nilInformation:&hasNilValue];
-	NSIndexPath *index = [tableView indexPathForSelectedRow];
-	if (index) 
-		NSLog(@"selected cell is none");
-	else {
-		NSLog(@"selected cell is row %d", [index row]);
-	}
+- (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)fromIndexPath toIndexPath:(NSIndexPath *)toIndexPath {
+	NSInteger fromRow = [fromIndexPath row];
+	NSInteger toRow = [toIndexPath row];
 
-	return @"Total amount : 0";
+	if (fromRow == toRow)
+		return;
+	
+	if (fromRow == self.selectedRow) {
+		self.selectedRow = toRow;
+	} else if (fromRow < self.selectedRow) {
+		if (self.selectedRow <= toRow) {
+			self.selectedRow = self.selectedRow - 1;
+		} 			
+	} else if (self.selectedRow >= toRow) {
+		self.selectedRow = self.selectedRow + 1;
+	}
+	
+	[super tableView:tableView moveRowAtIndexPath:fromIndexPath toIndexPath:toIndexPath];
 }
-*/
 
 #pragma mark -
 #pragma mark utility functions
@@ -386,10 +324,6 @@
 
 - (void)viewDidUnload {
     [super viewDidUnload];
-    // Release any retained subviews of the main view.
-    // e.g. self.myOutlet = nil;
-	// self.currentSection = nil;  !!! NEVER release NSManagedObject
-	// self.doneItem = nil;
 	self.summaryLabel = nil;
 	self.selectedRow = -1;
 	[self.currentSection removeObserver:self forKeyPath:kManagedObjectNameKey];
@@ -398,7 +332,7 @@
 
 - (void)dealloc {
 	[summaryLabel release];
-	[doneItem release];
+	// [doneItem release];
 	// [currentSection release];
     [super dealloc];
 }
