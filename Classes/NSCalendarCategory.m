@@ -26,39 +26,52 @@
 	return NSMakeRange(currentWeek, remainingWeek);
 }
 
-/* self의 날을 해석 가능한 CRepeatCriteria의 array로 반환
-   self의 수치들을 해서 가능한 조합에 넣고 조합이 틀리지 않으면 CRepeatCriteriaNotInitialized 적잘한 해석으로 반환
+/*
+ self의 가능한 repeatUnit들을 찾아 array로 반환
+ 가능한 CRepeatCriteria 조합에 숫자들을 넣어놓고 적절한 조합이 입력된 경우들만 반환
 */
 - (NSArray *) interpretate:(NSDate *)date repeatUnit:(NSCalendarUnit)unit {
     CRepeatCriteria *dayInfo = [[CRepeatCriteria alloc] init];         
     CRepeatCriteria *monthDayInfo = [[CRepeatCriteria alloc] init];
     CRepeatCriteria *lastdayInfo = [[CRepeatCriteria alloc] init];
     CRepeatCriteria *weekInfo = [[CRepeatCriteria alloc] init];
-    CRepeatCriteria *monthWeekInfo = [[CRepeatCriteria alloc] init];	// ???
+    CRepeatCriteria *monthWeekInfo = [[CRepeatCriteria alloc] init];
     CRepeatCriteria *lastweekInfo = [[CRepeatCriteria alloc] init];
     
 	NSArray *interpretateArrays = [[NSArray alloc] initWithObjects:dayInfo, monthDayInfo, lastdayInfo,
 								   weekInfo, monthWeekInfo, lastweekInfo, nil];
 
 	NSDateComponents *comp = [self components:kRepeatCalendarUnits fromDate:date];
-	if (unit & (NSWeekCalendarUnit | NSMonthCalendarUnit | NSYearCalendarUnit)) {
+	if ((NSWeekCalendarUnit | NSMonthCalendarUnit | NSYearCalendarUnit) & unit) {
         [weekInfo setCriteriaUnit:NSWeekdayCalendarUnit criteriaNumber:comp.weekday];
 		if (unit != NSWeekCalendarUnit) {
-			NSRange weekRange = [self rangeOfWeeksInMonth:date];
-            [weekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:weekRange.location];
-			
-			if (unit == NSYearCalendarUnit)
-                [weekInfo setCriteriaUnit:NSMonthCalendarUnit criteriaNumber:comp.month];
-			
-			if (weekRange.length == 0) {
-                [lastweekInfo copyCriteria:weekInfo];
-                [lastweekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:-1];
+            NSRange weekRange = [self rangeOfWeeksInMonth:date];
+            
+			if (unit == NSYearCalendarUnit) {
+                [weekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:comp.week];   // 매 *년 *째주
+
+                [monthWeekInfo setCriteriaUnit:NSMonthCalendarUnit criteriaNumber:comp.month];  
+                [monthWeekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:weekRange.location];
+                [monthWeekInfo setCriteriaUnit:NSWeekdayCalendarUnit criteriaNumber:comp.weekday];
+                
+                if (weekRange.length == 0) {    // 매 *년 *월 마지막 주
+                    [lastweekInfo copyCriteria:monthWeekInfo];
+                    [lastweekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:-1];
+                }
+            } else { // NSMonthCalendarUnit
+                [weekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:weekRange.location];  // 매 *월 *째주
+
+                if (weekRange.length == 0) {   // 매 *월 마지막 주
+                    [lastweekInfo copyCriteria:weekInfo];
+                    [lastweekInfo setCriteriaUnit:NSWeekCalendarUnit criteriaNumber:-1];
+                }
             }
 		}
 	}
     
-    if (unit & (NSMonthCalendarUnit | NSYearCalendarUnit)) {
-        NSUInteger dayNumber = [self ordinalityOfUnit:NSDayCalendarUnit inUnit:unit forDate:date];
+    if ((NSMonthCalendarUnit | NSYearCalendarUnit) & unit) {
+        // 년도나 월에 따라 적절한 값이 반환됨
+        NSUInteger dayNumber = [self ordinalityOfUnit:NSDayCalendarUnit inUnit:unit forDate:date];  
         [dayInfo setCriteriaUnit:NSDayCalendarUnit criteriaNumber:dayNumber];
         if (unit == NSYearCalendarUnit) {
             [monthDayInfo setCriteriaUnit:NSMonthCalendarUnit criteriaNumber:comp.month];
@@ -89,6 +102,11 @@
 	return result;
 }
 
+/*
+ - (NSDate *) nextDateWithCriteria:(CRepeatCriteria *)criteria repeatRule:(CRepeatRule *)rule fromDate:(NSDate *)date 에서 내부적으로 사용하는 함수
+ dateComponent의 년,월을 가지고 criteria에 해당하는 날을 찾아 반환한다
+
+*/
 - (NSDate *) dateWithCriteria:(CRepeatCriteria *)criteria monthDateComponents:(NSDateComponents *)dateComponent {
     if (dateComponent.year == 0 || dateComponent.month == 0)
         raise (-1);
@@ -96,9 +114,10 @@
     NSDate *firstday;
     dateComponent.day = 1;
     firstday = [self dateFromComponents:dateComponent];
-    if (criteria.type == CRepeatCriteriaDay || criteria.type == CRepeatCriteriaMonthDay)
+    if (criteria.type == CRepeatCriteriaDay || criteria.type == CRepeatCriteriaMonthDay) {
         dateComponent.day = criteria.day;
-    else if (criteria.type == CRepeatCriteriaNegativeDay)
+        // CRepeatCriteriaDay - repeat unit이 month, CRepeatCriteriaMonthDay - repeat unit이 year
+    } else if (criteria.type == CRepeatCriteriaNegativeDay)
         dateComponent.day = [self lastdayOfMonth:firstday];
     else if (criteria.type == CRepeatCriteriaWeek || criteria.type == CRepeatCriteriaMonthWeek) {
         NSDateComponents *firstdayComponent = [self components:NSWeekdayCalendarUnit fromDate:firstday];
@@ -121,6 +140,9 @@
     return [self dateFromComponents:dateComponent];
 }
 
+/*
+ date 이후 repeat rule의 간격을 더한 criteria의 날을 반환
+*/
 - (NSDate *) nextDateWithCriteria:(CRepeatCriteria *)criteria repeatRule:(CRepeatRule *)rule fromDate:(NSDate *)date {
     NSDate *newDate = nil;
     NSDateComponents *newComp = [[NSDateComponents alloc] init];
@@ -162,12 +184,15 @@
                 NSDate *newYearDay = [self dateFromComponents:newComp];
                 if (criteria.type == CRepeatCriteriaDay) {
                     intervalComp.day = criteria.day - 1;
-                    // NSLog(@"CRepeatCriteriaDay Year : %d, Day : %d", newComp.year, intervalComp.day);
                     newDate = [self dateByAddingComponents:intervalComp toDate:newYearDay options:0];
                 } else {
-                    // TODO : 확인하고 필요시 7 * week 하고 요일 보정으로 변경
-                    intervalComp.week = criteria.week;
-                    intervalComp.weekday = criteria.weekday;
+                    NSDateComponents *newYearComp = [self components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit | NSWeekdayCalendarUnit fromDate:newYearDay];
+                    intervalComp.day = (criteria.week - 1) * 7;
+                    if (criteria.weekday < newYearComp.weekday) {
+                        intervalComp.day = intervalComp.day + 7 - (newYearComp.weekday - criteria.weekday);
+                    } else {
+                        intervalComp.day = intervalComp.day + (criteria.weekday - newYearComp.weekday);                        
+                    }
                     newDate = [self dateByAddingComponents:intervalComp toDate:newYearDay options:0];
                 }
             } else if (criteria.type == CRepeatCriteriaMonthDay || criteria.type == CRepeatCriteriaMonthWeek ||
